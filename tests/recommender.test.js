@@ -60,13 +60,13 @@ describe('Exercices (à débloquer)', () => {
   const alice = users.find((u) => u.name === 'Alice');
   const hugo = users.find((u) => u.name === 'Hugo');
 
-  test('Exercice 1 : ne recommande aucun film déjà vu', {}, () => {
+  test('Exercice 1 : ne recommande aucun film déjà vu', () => {
     for (const u of users) {
       for (const r of run(u)) assert.ok(!u.watchedMovieIds.includes(r.movieId), `${u.name} a déjà vu ${r.movieId}`);
     }
   });
 
-  test('Exercice 2 : tient compte des genres préférés', { todo: 'TODO 2' }, () => {
+  test('Exercice 2 : tient compte des genres préférés', () => {
     const favs = new Set(alice.favoriteGenres);
     const hits = run(alice).filter((r) => movies.find((m) => m.id === r.movieId).genres.some((g) => favs.has(g)));
     assert.ok(hits.length >= 3, 'au moins 3 recommandations dans les genres favoris');
