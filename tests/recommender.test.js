@@ -97,7 +97,7 @@ describe('Exercices (à débloquer)', () => {
     assert.ok(recs.every((m) => m.popularity >= avgPop));
   });
 
-  test('Exercice 8 : reste rapide sur un grand catalogue (5000 films)', { todo: 'TODO 8' }, () => {
+  test('Exercice 8 : reste rapide sur un grand catalogue (5000 films)', () => {
     const big = Array.from({ length: 5000 }, (_, i) => ({ ...movies[i % movies.length], id: i + 1 }));
     const start = performance.now();
     recommendMovies(clone(alice), big, clone(users));

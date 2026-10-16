@@ -286,7 +286,6 @@ function recommendMovies(user, movies, users) {
   // Tri par score décroissant ; en cas d'égalité, le plus petit id d'abord (déterministe).
   scored.sort((a, b) => b.score - a.score || a.movie.id - b.movie.id);
 
-  // TODO 8 : optimiser les performances.
 
   return scored.slice(0, MAX_RECOMMENDATIONS).map((entry) => ({
     movieId: entry.movie.id,
