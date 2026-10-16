@@ -72,13 +72,13 @@ describe('Exercices (à débloquer)', () => {
     assert.ok(hits.length >= 3, 'au moins 3 recommandations dans les genres favoris');
   });
 
-  test('Exercice 3 : des profils différents reçoivent des recommandations différentes', { todo: 'TODO 3-4' }, () => {
+  test('Exercice 3 : des profils différents reçoivent des recommandations différentes', () => {
     const a = run(alice).map((r) => r.movieId).sort();
     const h = run(hugo).map((r) => r.movieId).sort();
     assert.notDeepStrictEqual(a, h);
   });
 
-  test('Exercice 4 : ne recommande pas les genres que l’utilisateur a mal notés', { todo: 'TODO 4' }, () => {
+  test('Exercice 4 : ne recommande pas les genres que l’utilisateur a mal notés', () => {
     const david = users.find((u) => u.name === 'David');
     const recs = run(david).map((r) => movies.find((m) => m.id === r.movieId));
     assert.ok(recs.every((m) => !m.genres.includes('Romance')));
