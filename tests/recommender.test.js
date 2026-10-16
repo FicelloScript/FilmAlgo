@@ -91,7 +91,7 @@ describe('Exercices (à débloquer)', () => {
     assert.ok(run(alice).some((r) => loved.has(r.movieId) && !alice.watchedMovieIds.includes(r.movieId)));
   });
 
-  test('Exercice 7 : le démarrage à froid reste pertinent (films populaires)', { todo: 'TODO 7' }, () => {
+  test('Exercice 7 : le démarrage à froid reste pertinent (films populaires)', () => {
     const avgPop = movies.reduce((s, m) => s + m.popularity, 0) / movies.length;
     const recs = run(coldUser).map((r) => movies.find((m) => m.id === r.movieId));
     assert.ok(recs.every((m) => m.popularity >= avgPop));
