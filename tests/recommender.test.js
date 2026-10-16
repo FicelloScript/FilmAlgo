@@ -60,7 +60,7 @@ describe('Exercices (à débloquer)', () => {
   const alice = users.find((u) => u.name === 'Alice');
   const hugo = users.find((u) => u.name === 'Hugo');
 
-  test('Exercice 1 : ne recommande aucun film déjà vu', { todo: 'TODO 1' }, () => {
+  test('Exercice 1 : ne recommande aucun film déjà vu', {}, () => {
     for (const u of users) {
       for (const r of run(u)) assert.ok(!u.watchedMovieIds.includes(r.movieId), `${u.name} a déjà vu ${r.movieId}`);
     }

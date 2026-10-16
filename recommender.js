@@ -39,10 +39,12 @@ function recommendMovies(user, movies, users) {
     throw new TypeError('recommendMovies : `users` doit être un tableau');
   }
 
-  // Algorithme volontairement simpliste : les 5 films les mieux notés, pour tout le monde.
-  const sorted = [...movies].sort((a, b) => b.rating - a.rating);
+  // TODO 1 : exclure les films déjà visionnés.
+  // Set = recherche instantanée (has) au lieu de parcourir le tableau à chaque film.
+  const watched = new Set(user.watchedMovieIds || []);
+  const candidates = movies.filter((movie) => !watched.has(movie.id));
 
-  // TODO 1 : exclure les films déjà visionnés (user.watchedMovieIds).
+  const sorted = candidates.sort((a, b) => b.rating - a.rating);
 
   // TODO 2 : prendre en compte les genres préférés (user.favoriteGenres).
 
