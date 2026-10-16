@@ -84,7 +84,7 @@ describe('Exercices (à débloquer)', () => {
     assert.ok(recs.every((m) => !m.genres.includes('Romance')));
   });
 
-  test('Exercice 5-6 : recommande un film bien noté (≥ 4) par un profil proche et pas encore vu', { todo: 'TODO 5-6' }, () => {
+  test('Exercice 5-6 : recommande un film bien noté (≥ 4) par un profil proche et pas encore vu', () => {
     // Alice et Gaëlle ont des goûts proches.
     const gaelle = users.find((u) => u.name === 'Gaëlle');
     const loved = new Set(gaelle.ratings.filter((r) => r.score >= 4).map((r) => r.movieId));

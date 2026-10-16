@@ -1,39 +1,33 @@
 'use strict';
 
 /**
- * ============================================================
- *  recommender.js — LE fichier à modifier pendant la formation
- * ============================================================
+ * recommender.js — moteur de recommandation CinéMatch
  *
- * recommendMovies(user, movies, users) doit retourner AU PLUS 5 recommandations :
+ * score = 100 × (0.35 × genre + 0.25 × affinité + 0.25 × collaboratif + 0.15 × qualité)
  *
- *   [ { movieId: 1, score: 4.7, reason: "Film bien noté" }, ... ]
- *
- * Contrat (voir README.md) :
- *  - fonction synchrone et SANS effet de bord : ne jamais modifier user, movies, users ;
- *  - movieId : identifiant d'un film existant, sans doublon ;
- *  - score   : nombre fini, résultats triés du meilleur au moins bon ;
- *  - reason  : courte phrase en français affichée à l'utilisateur ;
- *  - `user`, `movies` et `users` doivent rester les trois paramètres (même ordre).
- *
- * Données disponibles :
- *  - user  : { id, name, favoriteGenres, ratings: [{ movieId, score }], watchedMovieIds }
- *  - movies: [{ id, title, genres, year, rating, popularity }]
- *            (`rating` = note moyenne FICTIVE du film, pas la note de l'utilisateur !)
- *  - users : tous les profils (dont `user` lui-même).
- *
- * Après modification : relancer `node server.js` (Ctrl+C puis à nouveau) et
- * cliquer sur « Recalculer » dans l'application.
+ *  - genre        (0 à 1)  : part des genres favoris déclarés présents dans le film
+ *  - affinité     (-1 à 1) : goûts révélés par les notes personnelles, par genre
+ *  - collaboratif (-1 à 1) : avis des utilisateurs aux goûts proches
+ *  - qualité      (0 à 1)  : note moyenne du film
  */
 
 const MAX_RECOMMENDATIONS = 5;
 
 // Poids de chaque critère dans le score final (leur somme fait 1).
 const WEIGHTS = {
-  genre: 0.4,     // genres favoris déclarés (0 à 1)
-  affinity: 0.35, // goûts révélés par les notes personnelles (-1 à +1)
-  quality: 0.25,  // note moyenne du film (0 à 1)
+  genre: 0.35,         // ce que l'utilisateur dit aimer
+  affinity: 0.25,      // ce que ses notes montrent qu'il aime
+  collaborative: 0.25, // ce qu'aiment les profils qui lui ressemblent
+  quality: 0.15,       // qualité générale, sert surtout à départager
 };
+
+// Paramètres de la similarité entre utilisateurs.
+const MIN_COMMON_FOR_FULL_CONFIDENCE = 3; // en dessous, la similarité est réduite
+const MIN_SIMILARITY = 0.5;               // seuil pour être considéré comme « voisin »
+
+// ------------------------------------------------------------
+//  Critères individuels
+// ------------------------------------------------------------
 
 /**
  * Part des genres favoris de l'utilisateur présents dans le film (entre 0 et 1).
@@ -56,11 +50,16 @@ function qualityScore(movie) {
 }
 
 /**
+ * Transforme une note utilisateur (1 à 5) en valeur entre -1 et +1.
+ * 5 → +1 (adoré), 3 → 0 (neutre), 1 → -1 (détesté)
+ */
+function ratingToValue(score) {
+  return (score - 3) / 2;
+}
+
+/**
  * Affinité de l'utilisateur pour chaque genre, déduite de ses notes.
- * Chaque note (1-5) devient une valeur entre -1 et +1 : (note - 3) / 2
- *   5 → +1 (adoré), 3 → 0 (neutre), 1 → -1 (détesté)
- * Puis on fait la moyenne par genre.
- * Retourne une Map : genre → affinité (entre -1 et +1).
+ * Retourne une Map : genre → affinité moyenne (entre -1 et +1).
  */
 function buildGenreAffinity(ratings, moviesById) {
   const totals = new Map(); // genre → { sum, count }
@@ -69,7 +68,7 @@ function buildGenreAffinity(ratings, moviesById) {
     const movie = moviesById.get(movieId);
     if (!movie) continue; // film noté mais absent du catalogue : on l'ignore
 
-    const value = (score - 3) / 2;
+    const value = ratingToValue(score);
     for (const genre of movie.genres) {
       const total = totals.get(genre) || { sum: 0, count: 0 };
       total.sum += value;
@@ -101,6 +100,74 @@ function affinityScore(movie, genreAffinity) {
   return count === 0 ? 0 : sum / count;
 }
 
+// ------------------------------------------------------------
+//  Recommandation collaborative
+// ------------------------------------------------------------
+
+/**
+ * Notes d'un utilisateur sous forme de Map : movieId → note.
+ */
+function toRatingsMap(user) {
+  return new Map((user.ratings || []).map((r) => [r.movieId, r.score]));
+}
+
+/**
+ * TODO 5 : similarité entre deux utilisateurs (entre -1 et +1).
+ * Pour chaque film noté par les deux : accord = 1 - |noteA - noteB| / 2
+ *   même note → +1 ; 2 points d'écart → 0 ; 4 points d'écart → -1
+ * Similarité = moyenne des accords × confiance.
+ * Confiance = min(1, nbCommuns / 3) : peu de films en commun = conclusion prudente.
+ */
+function userSimilarity(ratingsA, ratingsB) {
+  let sum = 0;
+  let common = 0;
+  for (const [movieId, scoreA] of ratingsA) {
+    if (ratingsB.has(movieId)) {
+      sum += 1 - Math.abs(scoreA - ratingsB.get(movieId)) / 2;
+      common++;
+    }
+  }
+  if (common === 0) return 0; // aucun film en commun : on ne peut rien dire
+
+  const confidence = Math.min(1, common / MIN_COMMON_FOR_FULL_CONFIDENCE);
+  return (sum / common) * confidence;
+}
+
+/**
+ * TODO 6 : score collaboratif de chaque film (entre -1 et +1).
+ * On garde les voisins (similarité ≥ MIN_SIMILARITY), puis pour chaque film,
+ * moyenne de leurs avis pondérée par leur similarité.
+ * Retourne une Map : movieId → score collaboratif.
+ */
+function buildCollaborativeScores(user, users) {
+  const myRatings = toRatingsMap(user);
+  const totals = new Map(); // movieId → { sum, weight }
+
+  for (const other of users) {
+    if (other.id === user.id) continue; // on ne se compare pas à soi-même
+
+    const similarity = userSimilarity(myRatings, toRatingsMap(other));
+    if (similarity < MIN_SIMILARITY) continue; // pas assez proche : ignoré
+
+    for (const { movieId, score } of other.ratings || []) {
+      const total = totals.get(movieId) || { sum: 0, weight: 0 };
+      total.sum += similarity * ratingToValue(score);
+      total.weight += similarity;
+      totals.set(movieId, total);
+    }
+  }
+
+  const scores = new Map();
+  for (const [movieId, { sum, weight }] of totals) {
+    scores.set(movieId, sum / weight);
+  }
+  return scores;
+}
+
+// ------------------------------------------------------------
+//  Fonction principale
+// ------------------------------------------------------------
+
 function recommendMovies(user, movies, users) {
   if (!user || typeof user !== 'object') {
     throw new TypeError('recommendMovies : `user` doit être un objet');
@@ -112,13 +179,12 @@ function recommendMovies(user, movies, users) {
     throw new TypeError('recommendMovies : `users` doit être un tableau');
   }
 
-  // Index pour des recherches instantanées.
+  // Index pour des recherches instantanées (calculés une seule fois).
   const watched = new Set(user.watchedMovieIds || []);
   const favoriteGenres = new Set(user.favoriteGenres || []);
   const moviesById = new Map(movies.map((movie) => [movie.id, movie]));
-
-  // TODO 4 : goûts révélés par les notes personnelles.
   const genreAffinity = buildGenreAffinity(user.ratings || [], moviesById);
+  const collaborativeScores = buildCollaborativeScores(user, users);
 
   // Score de pertinence de chaque film non vu.
   const scored = [];
@@ -127,32 +193,37 @@ function recommendMovies(user, movies, users) {
 
     const genre = genreMatchScore(movie, favoriteGenres);
     const affinity = affinityScore(movie, genreAffinity);
+    const collaborative = collaborativeScores.get(movie.id) || 0;
     const quality = qualityScore(movie);
-    const score =
-      100 * (WEIGHTS.genre * genre + WEIGHTS.affinity * affinity + WEIGHTS.quality * quality);
 
-    scored.push({ movie, score, genre, affinity });
+    const score =
+      100 *
+      (WEIGHTS.genre * genre +
+        WEIGHTS.affinity * affinity +
+        WEIGHTS.collaborative * collaborative +
+        WEIGHTS.quality * quality);
+
+    scored.push({ movie, score, genre, affinity, collaborative });
   }
 
   // Tri par score décroissant ; en cas d'égalité, le plus petit id d'abord (déterministe).
   scored.sort((a, b) => b.score - a.score || a.movie.id - b.movie.id);
 
-  // TODO 5 : mesurer la similarité entre utilisateurs (paramètre `users`).
-  // TODO 6 : intégrer un score collaboratif (ce qu'aiment les utilisateurs proches).
   // TODO 7 : gérer les cas limites (aucun historique, catalogue vide, peu de films...).
   // TODO 8 : optimiser les performances.
 
-  return scored.slice(0, MAX_RECOMMENDATIONS).map(({ movie, score, genre, affinity }) => ({
-    movieId: movie.id,
-    score: Math.round(score * 10) / 10,
-    reason: buildReason(genre, affinity),
+  return scored.slice(0, MAX_RECOMMENDATIONS).map((entry) => ({
+    movieId: entry.movie.id,
+    score: Math.round(entry.score * 10) / 10,
+    reason: buildReason(entry),
   }));
 }
 
 /**
  * Justification affichée à l'utilisateur, selon le critère qui a le plus joué.
  */
-function buildReason(genre, affinity) {
+function buildReason({ genre, affinity, collaborative }) {
+  if (collaborative >= 0.5) return 'Apprécié par des profils qui vous ressemblent';
   if (affinity >= 0.5) return 'Proche des films que vous avez adorés';
   if (genre > 0) return 'Correspond à vos genres préférés';
   return 'Film bien noté par le public';
