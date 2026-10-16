@@ -4,6 +4,21 @@ Ce projet remplace l'algorithme initial de CinéMatch, qui recommandait les 5 fi
 
 Tout le code de l'algorithme se trouve dans `recommender.js`.
 
+## Prérequis
+Node.js LTS récent (20, 22 ou 24). Aucun npm install nécessaire.
+
+## Aperçu
+
+**David (Horreur, Thriller)**
+
+![Recommandations de David](screenshots/david.png)
+
+**Chloé (Romance, Comédie)**
+
+![Recommandations de Chloé](screenshots/chloe.png)
+
+![Résultat des tests](screenshots/tests.png)
+
 ## Lancer le projet
 
 ```bash
